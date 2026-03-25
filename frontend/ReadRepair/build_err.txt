@@ -1,0 +1,21 @@
+
+> readrepair@0.0.0 build
+> vite build
+
+[36mvite v7.3.1 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32m✓[39m 8 modules transformed.
+[31m✗[39m Build failed in 570ms
+[31merror during build:
+[31m[@tailwindcss/vite:generate:build] Cannot apply unknown utility class `bg-base-100`. Are you using CSS modules or similar and missing `@reference`? https://tailwindcss.com/docs/functions-and-directives#reference-directive[31m
+file: [36mD:/Read_Repair_Mechanism/frontend/ReadRepair/src/styles/app.css[31m
+    at onInvalidCandidate (file:///D:/Read_Repair_Mechanism/frontend/ReadRepair/node_modules/tailwindcss/dist/chunk-CT46QCH7.mjs:21:1314)
+    at Ce (file:///D:/Read_Repair_Mechanism/frontend/ReadRepair/node_modules/tailwindcss/dist/chunk-CT46QCH7.mjs:16:36652)
+    at file:///D:/Read_Repair_Mechanism/frontend/ReadRepair/node_modules/tailwindcss/dist/chunk-CT46QCH7.mjs:21:355
+    at br (file:///D:/Read_Repair_Mechanism/frontend/ReadRepair/node_modules/tailwindcss/dist/chunk-CT46QCH7.mjs:3:1718)
+    at I (file:///D:/Read_Repair_Mechanism/frontend/ReadRepair/node_modules/tailwindcss/dist/chunk-CT46QCH7.mjs:3:1377)
+    at Ae (file:///D:/Read_Repair_Mechanism/frontend/ReadRepair/node_modules/tailwindcss/dist/chunk-CT46QCH7.mjs:21:172)
+    at Wi (file:///D:/Read_Repair_Mechanism/frontend/ReadRepair/node_modules/tailwindcss/dist/chunk-CT46QCH7.mjs:38:294)
+    at async Za (file:///D:/Read_Repair_Mechanism/frontend/ReadRepair/node_modules/tailwindcss/dist/chunk-CT46QCH7.mjs:38:631)
+    at async rf (file:///D:/Read_Repair_Mechanism/frontend/ReadRepair/node_modules/tailwindcss/dist/chunk-CT46QCH7.mjs:38:1406)
+    at async lu (file:///D:/Read_Repair_Mechanism/frontend/ReadRepair/node_modules/@tailwindcss/node/dist/index.mjs:10:3458)[39m

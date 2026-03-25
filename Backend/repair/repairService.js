@@ -25,7 +25,8 @@ class RepairService {
     this.processing = false;
   }
 
-  scheduleRepair(task) {
+  async scheduleRepair(task) {
+    console.log(`Scheduling repair for replicas: ${task.staleReplicaIndices.join(', ')}`);
     this.queue.push(task);
 
     if (!this.processing) {
@@ -60,7 +61,8 @@ class RepairService {
 
   async applyRepair(task) {
     const { correctDoc, staleReplicaIndices } = task;
-
+     console.log(`Applying repair to replicas: ${staleReplicaIndices.join(', ')} for doc: ${correctDoc._id}`);
+     
     if (!correctDoc || staleReplicaIndices.length === 0) {
       return;
     }

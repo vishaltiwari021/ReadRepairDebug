@@ -37,9 +37,14 @@ async function getNextVersion(id) {
   return Math.max(...existingDocs.map((doc) => Number(doc.version || 1))) + 1;
 }
 
+
 function parseOptionalPositiveInteger(value) {
   if (value === undefined || value === null || value === "") {
     return null;
+  }
+
+  if (typeof value === 'string') {
+    if (!/^\d+$/.test(value)) return null;
   }
 
   const parsedValue = Number(value);
@@ -149,7 +154,7 @@ app.get("/document/:id", async (req, res) => {
 app.post("/document/:id/simulate-stale", async (req, res) => {
   try {
     const { id } = req.params;
-    const { replicaIndex = 1, targetVersion } = req.body || {};
+   const { replicaIndex = 0, targetVersion } = req.body || {};
     const parsedReplicaIndex = Number(replicaIndex);
     const replica = db.getReplica(parsedReplicaIndex);
 

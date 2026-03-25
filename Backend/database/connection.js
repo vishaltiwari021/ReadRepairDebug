@@ -5,8 +5,10 @@ const DB_NAME = process.env.DB_NAME || "read_repair";
 const REPLICA_COLLECTIONS = ["replica_1", "replica_2", "replica_3"];
 
 function normalizeDocument(doc) {
+  if (!doc) return null;  // Add null check
+  
   return {
-    _id: doc._id,
+    _id: String(doc._id),  // Normalize to string for consistency
     data: doc.data,
     version: Number(doc.version || 1),
     updatedAt: doc.updatedAt ? new Date(doc.updatedAt) : new Date(),
@@ -82,13 +84,15 @@ class DatabaseConnection {
     return normalizeDocument(doc);
   }
 
-  async findDocument(id, replica) {
-    try {
-      return await replica.findOne({ _id: id });
-    } catch {
-      return null;
-    }
+ 
+async findDocument(id, replica) {
+  try {
+    return await replica.findOne({ _id: id });
+  } catch (error) {
+    console.error(`Error finding document ${id} in replica:`, error);
+    return null;  // Good, but log the error
   }
+}
 
   async findDocumentsById(id) {
     return Promise.all(this.getReplicas().map((replica) => this.findDocument(id, replica)));

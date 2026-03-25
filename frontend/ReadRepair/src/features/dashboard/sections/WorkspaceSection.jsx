@@ -48,7 +48,7 @@ function WorkspaceSection() {
           <ActionsPanel loadingAction={state.loadingAction} actions={actions} />
         </div>
 
-        <div className="col-span-1 lg:col-span-1 xl:col-span-1.5 flex flex-col gap-6">
+        <div className="col-span-1 lg:col-span-1 xl:col-span-1 flex flex-col gap-6">
           <OutputPanel
             title="Last Read Result"
             value={state.lastRead}

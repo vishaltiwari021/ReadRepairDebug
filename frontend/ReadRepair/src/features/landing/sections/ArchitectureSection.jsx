@@ -22,8 +22,8 @@ function ArchitectureSection() {
           </ul>
         </div>
 
-        <div className="w-full lg:w-1/2 mockup-code bg-neutral text-neutral-content shadow-xl border border-neutral-focus">
-          <div className="px-6 pb-2 text-sm opacity-50 font-bold border-b border-neutral-focus mb-4">Repair logic sketch</div>
+        <div className="w-full lg:w-1/2 mockup-code bg-neutral text-neutral-content shadow-xl border border-neutral-content/20">
+          <div className="px-6 pb-2 text-sm opacity-50 font-bold border-b border-neutral-content/20 mb-4">Repair logic sketch</div>
           <pre data-prefix="1" className="text-success"><code>async function quorumReadRepair(key, replicas) {"{"}</code></pre>
           <pre data-prefix="2"><code>  const reads = await Promise.all(replicas.map(readReplica));</code></pre>
           <pre data-prefix="3"><code>  const latest = reads.sort((a, b) =&gt; b.version - a.version)[0];</code></pre>

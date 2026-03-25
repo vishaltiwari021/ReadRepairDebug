@@ -205,7 +205,7 @@ export async function startServer(port = Number(process.env.PORT) || 3000) {
   await db.connect();
 
   return new Promise((resolve) => {
-    const server = app.listen(port, () => {
+    const server = app.listen(port, "localhost", () => {
       console.log(`Server running on port ${port}`);
       resolve(server);
     });

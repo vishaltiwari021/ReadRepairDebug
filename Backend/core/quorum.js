@@ -36,11 +36,12 @@ selectCorrectVersion(documents) {
     throw new Error("No version achieved quorum");
   }
 
+//it return the newest version:-
   const candidates = validDocs.filter((doc) => Number(doc.version || 1) === selectedVersion);
   candidates.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   return candidates[0];
 }
-
+// the chosen correct version. Those indexes are returned so the repair service knows exactly which replicas to update.
   identifyStaleReplicas(documents, correctVersion) {
     const staleIndices = [];
     documents.forEach((doc, index) => {

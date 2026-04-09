@@ -1,8 +1,14 @@
 import { useState } from "react";
 import { readRepairApi } from "../services/readRepairApi.js";
+import { trimTrailingSlash } from "../../../shared/utils/url.js";
+import {
+  getErrorMessage,
+  parseRequiredNumber,
+  parseRequiredText,
+} from "../../../shared/utils/validation.js";
 
-const DEFAULT_API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "/api" : "http://localhost:3000");
+const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+const MAX_LOG_ENTRIES = 10;
 
 const INITIAL_FORM = {
   docId: "user_123",
@@ -23,31 +29,6 @@ function createLogEntry(title, payload, type = "info") {
   };
 }
 
-function trimBaseUrl(baseUrl) {
-  const trimmedValue = baseUrl.trim();
-  return trimmedValue.endsWith("/") ? trimmedValue.slice(0, -1) : trimmedValue;
-}
-
-function parseRequiredNumber(value, fieldLabel) {
-  const parsedValue = Number(value);
-
-  if (!Number.isFinite(parsedValue)) {
-    throw new Error(`${fieldLabel} must be a valid number.`);
-  }
-
-  return parsedValue;
-}
-
-function parseRequiredText(value, fieldLabel) {
-  const trimmedValue = value.trim();
-
-  if (!trimmedValue) {
-    throw new Error(`${fieldLabel} is required.`);
-  }
-
-  return trimmedValue;
-}
-
 export function useReadRepairDashboard() {
   const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API_BASE_URL);
   const [form, setForm] = useState(INITIAL_FORM);
@@ -56,10 +37,10 @@ export function useReadRepairDashboard() {
   const [logs, setLogs] = useState([]);
   const [loadingAction, setLoadingAction] = useState("");
 
-  const normalizedBaseUrl = trimBaseUrl(apiBaseUrl);
+  const normalizedBaseUrl = trimTrailingSlash(apiBaseUrl);
 
   const pushLog = (title, payload, type = "info") => {
-    setLogs((previousLogs) => [createLogEntry(title, payload, type), ...previousLogs.slice(0, 9)]);
+    setLogs((previousLogs) => [createLogEntry(title, payload, type), ...previousLogs.slice(0, MAX_LOG_ENTRIES - 1)]);
   };
 
   const updateField = (fieldName) => (value) => {
@@ -75,7 +56,7 @@ export function useReadRepairDashboard() {
     try {
       await action();
     } catch (error) {
-      pushLog(label, { error: error.message }, "error");
+      pushLog(label, { error: getErrorMessage(error) }, "error");
     } finally {
       setLoadingAction("");
     }
@@ -141,11 +122,24 @@ export function useReadRepairDashboard() {
   const runGuidedDemo = () =>
     withAction("Run Guided Demo", async () => {
       const documentId = getDocumentId();
-      const createdDocument = await readRepairApi.createDocument(normalizedBaseUrl, {
-        id: documentId,
-        data: buildDocumentPayload(form.balance),
-      });
-      pushLog("Document created", createdDocument, "success");
+      let createdDocument;
+
+      try {
+        createdDocument = await readRepairApi.createDocument(normalizedBaseUrl, {
+          id: documentId,
+          data: buildDocumentPayload(form.balance),
+        });
+        pushLog("Document created", createdDocument, "success");
+      } catch (error) {
+        if (error?.statusCode !== 409) {
+          throw error;
+        }
+
+        createdDocument = await readRepairApi.updateDocument(normalizedBaseUrl, documentId, {
+          data: buildDocumentPayload(form.balance),
+        });
+        pushLog("Document refreshed", createdDocument, "success");
+      }
 
       const updatedDocument = await readRepairApi.updateDocument(normalizedBaseUrl, documentId, {
         data: buildDocumentPayload(form.newBalance),

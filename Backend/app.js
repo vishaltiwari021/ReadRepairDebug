@@ -4,6 +4,13 @@ import db from "./database/connection.js";
 import quorum from "./core/quorum.js";
 import repairService from "./repair/repairService.js";
 import metrics from "./monitoring/metrics.js";
+import { HttpError } from "./utils/httpError.js";
+import {
+  parseNonNegativeInteger,
+  parseOptionalPositiveInteger,
+  requireDefinedValue,
+  requireString,
+} from "./utils/validation.js";
 
 const app = express();
 
@@ -14,12 +21,16 @@ function createStoredDocument(id, data, version) {
   return {
     _id: id,
     data,
-    version,
+    version: Number(version),
     updatedAt: new Date(),
   };
 }
 
 function sendServerError(res, error) {
+  if (error instanceof HttpError || Number.isInteger(error?.statusCode)) {
+    return res.status(error.statusCode).json({ error: error.message });
+  }
+
   return res.status(500).json({ error: error.message || "Internal server error" });
 }
 
@@ -37,24 +48,6 @@ async function getNextVersion(id) {
   return Math.max(...existingDocs.map((doc) => Number(doc.version || 1))) + 1;
 }
 
-
-function parseOptionalPositiveInteger(value) {
-  if (value === undefined || value === null || value === "") {
-    return null;
-  }
-
-  if (typeof value === 'string') {
-    if (!/^\d+$/.test(value)) return null;
-  }
-
-  const parsedValue = Number(value);
-  if (!Number.isInteger(parsedValue) || parsedValue < 1) {
-    return null;
-  }
-
-  return parsedValue;
-}
-
 app.get("/", (_req, res) => {
   res.json({
     service: "Read Repair Mechanism",
@@ -66,6 +59,7 @@ app.get("/", (_req, res) => {
       "POST /document/:id/simulate-stale",
       "POST /repair/full",
       "GET /metrics",
+      "GET /health",
     ],
   });
 });
@@ -73,12 +67,15 @@ app.get("/", (_req, res) => {
 app.post("/document", async (req, res) => {
   try {
     const { id, data } = req.body;
+    const documentId = requireString(id, "id");
+    const documentData = requireDefinedValue(data, "data");
+    const existingDocs = await loadReplicaDocuments(documentId);
 
-    if (!id || data === undefined) {
-      return res.status(400).json({ error: "id and data are required" });
+    if (existingDocs.some(Boolean)) {
+      return res.status(409).json({ error: "Document already exists" });
     }
 
-    const document = createStoredDocument(id, data, 1);
+    const document = createStoredDocument(documentId, documentData, 1);
     await db.writeToAllReplicas(document);
 
     return res.status(201).json({ message: "Document created", document });
@@ -91,13 +88,11 @@ app.put("/document/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { data } = req.body;
+    const documentId = requireString(id, "id");
+    const documentData = requireDefinedValue(data, "data");
 
-    if (data === undefined) {
-      return res.status(400).json({ error: "data is required" });
-    }
-
-    const nextVersion = await getNextVersion(id);
-    const document = createStoredDocument(id, data, nextVersion);
+    const nextVersion = await getNextVersion(documentId);
+    const document = createStoredDocument(documentId, documentData, nextVersion);
 
     await db.writeToAllReplicas(document);
 
@@ -110,9 +105,10 @@ app.put("/document/:id", async (req, res) => {
 app.get("/document/:id", async (req, res) => {
   try {
     const { id } = req.params;
+    const documentId = requireString(id, "id");
     metrics.recordRead();
 
-    const replicaReads = await loadReplicaDocuments(id);
+    const replicaReads = await loadReplicaDocuments(documentId);
     const availableDocs = replicaReads.filter(Boolean);
 
     if (availableDocs.length === 0) {
@@ -154,8 +150,9 @@ app.get("/document/:id", async (req, res) => {
 app.post("/document/:id/simulate-stale", async (req, res) => {
   try {
     const { id } = req.params;
-   const { replicaIndex = 0, targetVersion } = req.body || {};
-    const parsedReplicaIndex = Number(replicaIndex);
+    const { replicaIndex = 0, targetVersion } = req.body || {};
+    const documentId = requireString(id, "id");
+    const parsedReplicaIndex = parseNonNegativeInteger(replicaIndex, "replicaIndex");
     const replica = db.getReplica(parsedReplicaIndex);
 
     if (!replica) {
@@ -164,7 +161,7 @@ app.post("/document/:id/simulate-stale", async (req, res) => {
       });
     }
 
-    const current = await db.findDocument(id, replica);
+    const current = await db.findDocument(documentId, replica);
     if (!current) {
       return res.status(404).json({ error: "Document not found in selected replica" });
     }
@@ -173,7 +170,7 @@ app.post("/document/:id/simulate-stale", async (req, res) => {
     const newVersion = parsedTargetVersion ?? Math.max(1, Number(current.version || 1) - 1);
 
     await replica.updateOne(
-      { _id: id },
+      { _id: documentId },
       {
         $set: {
           version: newVersion,
@@ -185,7 +182,7 @@ app.post("/document/:id/simulate-stale", async (req, res) => {
     return res.json({
       message: "Replica modified to simulate stale data",
       replicaIndex: parsedReplicaIndex,
-      id,
+      id: documentId,
       version: newVersion,
     });
   } catch (error) {
@@ -204,6 +201,14 @@ app.post("/repair/full", async (_req, res) => {
 
 app.get("/metrics", (_req, res) => {
   return res.json(metrics.getStats());
+});
+
+app.get("/health", (_req, res) => {
+  return res.json({
+    status: "ok",
+    database: db.isConnected ? "connected" : "disconnected",
+    replicas: db.replicaCount,
+  });
 });
 
 export async function startServer(port = Number(process.env.PORT) || 3000) {

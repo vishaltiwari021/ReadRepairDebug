@@ -5,10 +5,10 @@ const DB_NAME = process.env.DB_NAME || "read_repair";
 const REPLICA_COLLECTIONS = ["replica_1", "replica_2", "replica_3"];
 
 function normalizeDocument(doc) {
-  if (!doc) return null;  // Add null check
-  
+  if (!doc) return null;
+
   return {
-    _id: String(doc._id),  // Normalize to string for consistency
+    _id: String(doc._id),
     data: doc.data,
     version: Number(doc.version || 1),
     updatedAt: doc.updatedAt ? new Date(doc.updatedAt) : new Date(),
@@ -37,6 +37,9 @@ class DatabaseConnection {
     try {
       await mongoose.connect(MONGO_URI, {
         dbName: DB_NAME,
+        maxPoolSize: 10,
+        serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 5000,
       });
 
       this.isConnected = true;
@@ -61,6 +64,10 @@ class DatabaseConnection {
   }
 
   get db() {
+    if (!this.isConnected || !mongoose.connection.db) {
+      throw new Error("Database connection is not ready. Call connect() first.");
+    }
+
     return mongoose.connection.db;
   }
 
@@ -84,15 +91,14 @@ class DatabaseConnection {
     return normalizeDocument(doc);
   }
 
- 
-async findDocument(id, replica) {
-  try {
-    return await replica.findOne({ _id: id });
-  } catch (error) {
-    console.error(`Error finding document ${id} in replica:`, error);
-    return null;  // Good, but log the error
+  async findDocument(id, replica) {
+    try {
+      return await replica.findOne({ _id: id });
+    } catch (error) {
+      console.error(`Error finding document ${id} in replica:`, error);
+      return null;
+    }
   }
-}
 
   async findDocumentsById(id) {
     return Promise.all(this.getReplicas().map((replica) => this.findDocument(id, replica)));
@@ -115,6 +121,9 @@ async findDocument(id, replica) {
 
   async writeToReplicas(doc, replicaIndices) {
     const normalizedDoc = this.normalizeDocument(doc);
+    if (!normalizedDoc) {
+      throw new Error("Document is required");
+    }
 
     await Promise.all(
       replicaIndices.map(async (index) => {

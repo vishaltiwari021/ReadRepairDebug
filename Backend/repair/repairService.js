@@ -1,4 +1,22 @@
 import db from "../database/connection.js";
+import { REPAIR_TIMEOUT_MS } from "../config/repairPolicy.js";
+
+function withTimeout(promise, timeoutMs, label) {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  return Promise.race([
+    promise.finally(() => {
+      clearTimeout(timeoutId);
+    }),
+    timeoutPromise,
+  ]);
+}
 
 function selectLatestDocument(documents) {
   const validDocuments = documents.filter(Boolean);
@@ -23,19 +41,29 @@ class RepairService {
   constructor() {
     this.queue = [];
     this.processing = false;
+    this.scheduled = false;
   }
 
-  async scheduleRepair(task) {
+  scheduleRepair(task) {
     console.log(`Scheduling repair for replicas: ${task.staleReplicaIndices.join(', ')}`);
     this.queue.push(task);
 
-    if (!this.processing) {
-      setTimeout(() => {
-        this.processQueue().catch((error) => {
-          console.error("Repair queue failed:", error);
-        });
-      }, 0);
+    this.scheduleProcessing();
+  }
+
+  scheduleProcessing() {
+    if (this.processing || this.scheduled) {
+      return;
     }
+
+    this.scheduled = true;
+
+    setImmediate(() => {
+      this.scheduled = false;
+      this.processQueue().catch((error) => {
+        console.error("Repair queue failed:", error);
+      });
+    });
   }
 
   async processQueue() {
@@ -52,22 +80,34 @@ class RepairService {
           continue;
         }
 
-        await this.applyRepair(task);
+        try {
+          await this.applyRepair(task);
+        } catch (error) {
+          console.error("Repair task failed:", error);
+        }
       }
     } finally {
       this.processing = false;
+      if (this.queue.length > 0) {
+        this.scheduleProcessing();
+      }
     }
   }
 
   async applyRepair(task) {
     const { correctDoc, staleReplicaIndices } = task;
-     console.log(`Applying repair to replicas: ${staleReplicaIndices.join(', ')} for doc: ${correctDoc._id}`);
-     
-    if (!correctDoc || staleReplicaIndices.length === 0) {
+
+    if (!correctDoc || !Array.isArray(staleReplicaIndices) || staleReplicaIndices.length === 0) {
       return;
     }
 
-    await db.writeToReplicas(correctDoc, staleReplicaIndices);
+    console.log(`Applying repair to replicas: ${staleReplicaIndices.join(', ')} for doc: ${correctDoc._id}`);
+
+    await withTimeout(
+      db.writeToReplicas(correctDoc, staleReplicaIndices),
+      REPAIR_TIMEOUT_MS,
+      "Repair write timed out",
+    );
   }
 
   async runFullRepair() {
@@ -83,7 +123,7 @@ class RepairService {
       }
 
       const staleReplicaIndices = replicaDocs.reduce((indices, currentDoc, index) => {
-        const isStale = !currentDoc || Number(currentDoc.version || 0) < correctDoc.version;
+        const isStale = !currentDoc || Number(currentDoc.version || 1) < correctDoc.version;
         if (isStale) {
           indices.push(index);
         }
@@ -94,7 +134,11 @@ class RepairService {
         continue;
       }
 
-      await db.writeToReplicas(correctDoc, staleReplicaIndices);
+      await withTimeout(
+        db.writeToReplicas(correctDoc, staleReplicaIndices),
+        REPAIR_TIMEOUT_MS,
+        "Full repair timed out",
+      );
       repairOperations += staleReplicaIndices.length;
     }
 

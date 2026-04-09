@@ -45,7 +45,7 @@ selectCorrectVersion(documents) {
   identifyStaleReplicas(documents, correctVersion) {
     const staleIndices = [];
     documents.forEach((doc, index) => {
-      if (!doc || Number(doc.version || 0) < Number(correctVersion)) {
+      if (!doc || Number(doc.version || 1) < Number(correctVersion)) {
         staleIndices.push(index);
       }
     });

@@ -12,16 +12,16 @@ function App() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <Navbar />
 
-      <main className="flex flex-col gap-16 mt-8">
-        <HeroSection />
-        <HighlightsSection />
-        <div className="divider opacity-30"></div>
-        <WorkspaceSection />
-        <div className="divider opacity-30"></div>
-        <ArchitectureSection />
-      </main>
+        <main className="flex flex-col gap-16 mt-8">
+          <HeroSection />
+          <HighlightsSection />
+          <div className="divider opacity-30"></div>
+          <WorkspaceSection />
+          <div className="divider opacity-30"></div>
+          <ArchitectureSection />
+        </main>
 
-      <Footer />
+        <Footer />
       </div>
     </div>
   );

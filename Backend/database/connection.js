@@ -1,8 +1,27 @@
 import mongoose from "mongoose";
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/read_repair";
-const DB_NAME = process.env.DB_NAME || "read_repair";
 const REPLICA_COLLECTIONS = ["replica_1", "replica_2", "replica_3"];
+
+function getConnectionOptions() {
+  const mongoUri = process.env.MONGO_URI?.trim();
+
+  if (!mongoUri) {
+    throw new Error("Missing MONGO_URI environment variable.");
+  }
+
+  const dbName = process.env.DB_NAME?.trim();
+  const options = {
+    maxPoolSize: 10,
+    serverSelectionTimeoutMS: 5000,
+    connectTimeoutMS: 5000,
+  };
+
+  if (dbName) {
+    options.dbName = dbName;
+  }
+
+  return { mongoUri, options };
+}
 
 function normalizeDocument(doc) {
   if (!doc) return null;
@@ -22,7 +41,7 @@ class DatabaseConnection {
   }
 
   async connect() {
-    if (this.isConnected) {
+    if (this.isConnected && mongoose.connection.readyState === 1) {
       return;
     }
 
@@ -35,20 +54,26 @@ class DatabaseConnection {
 
   async openConnection() {
     try {
-      await mongoose.connect(MONGO_URI, {
-        dbName: DB_NAME,
-        maxPoolSize: 10,
-        serverSelectionTimeoutMS: 5000,
-        connectTimeoutMS: 5000,
-      });
-
-      this.isConnected = true;
+      const { mongoUri, options } = getConnectionOptions();
+      await mongoose.connect(mongoUri, options);
 
       // MongoDB already creates a unique _id index automatically for every collection.
       // Touch each replica collection without redefining that index.
       await Promise.all(this.getReplicas().map((replica) => replica.estimatedDocumentCount()));
+
+      this.isConnected = true;
     } catch (error) {
+      this.isConnected = false;
       this.connectionPromise = null;
+
+      if (mongoose.connection.readyState !== 0) {
+        try {
+          await mongoose.disconnect();
+        } catch (disconnectError) {
+          console.error("Failed to clean up MongoDB connection after startup error:", disconnectError);
+        }
+      }
+
       throw error;
     }
   }
@@ -64,7 +89,7 @@ class DatabaseConnection {
   }
 
   get db() {
-    if (!this.isConnected || !mongoose.connection.db) {
+    if (mongoose.connection.readyState !== 1 || !mongoose.connection.db) {
       throw new Error("Database connection is not ready. Call connect() first.");
     }
 

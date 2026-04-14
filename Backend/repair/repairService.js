@@ -1,5 +1,5 @@
 import db from "../database/connection.js";
-import { REPAIR_TIMEOUT_MS } from "../config/repairPolicy.js";
+import { getRepairTimeoutMs } from "../config/repairPolicy.js";
 
 function withTimeout(promise, timeoutMs, label) {
   let timeoutId;
@@ -105,7 +105,7 @@ class RepairService {
 
     await withTimeout(
       db.writeToReplicas(correctDoc, staleReplicaIndices),
-      REPAIR_TIMEOUT_MS,
+      getRepairTimeoutMs(),
       "Repair write timed out",
     );
   }
@@ -136,7 +136,7 @@ class RepairService {
 
       await withTimeout(
         db.writeToReplicas(correctDoc, staleReplicaIndices),
-        REPAIR_TIMEOUT_MS,
+        getRepairTimeoutMs(),
         "Full repair timed out",
       );
       repairOperations += staleReplicaIndices.length;
